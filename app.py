@@ -30,6 +30,11 @@ with st.sidebar:
     # API Key input
     api_key = st.text_input("Enter your Anthropic API Key:", type="password")
     
+    # Reset button
+    if st.button("Reset Chat History"):
+        st.session_state.messages = []
+        st.success("Chat history has been reset!")
+    
     # Model selection
     selected_model = st.selectbox(
         "Select Claude model:",
@@ -88,11 +93,19 @@ def call_claude_api(system_prompt, messages, model, api_key):
     # Create the message array for the API
     api_messages = []
     for msg in messages:
-        if msg["role"] != "system":  # Skip system messages
+        if msg["role"] != "system" and msg["content"] and msg["content"].strip():  # Skip system messages and ensure content is not empty
             api_messages.append({
                 "role": msg["role"],
                 "content": msg["content"]
             })
+    
+    # Ensure there's at least one user message
+    if not any(msg["role"] == "user" for msg in api_messages):
+        # Add a default user message if none exists
+        api_messages.append({
+            "role": "user",
+            "content": "Hello"
+        })
     
     data = {
         "model": model,
@@ -102,6 +115,30 @@ def call_claude_api(system_prompt, messages, model, api_key):
         "messages": api_messages
     }
     
+    # Debug information
+    debug_data = {
+        "url": "https://api.anthropic.com/v1/messages",
+        "headers": {
+            "x-api-key": "sk-***" + api_key[-4:],  # Show only last 4 chars
+            "content-type": "application/json",
+            "anthropic-version": "2023-06-01"
+        },
+        "data": {
+            "model": model,
+            "system": system_prompt[:100] + "...",  # Truncate for display
+            "max_tokens": 2000,
+            "temperature": 0,
+            "messages": [
+                {
+                    "role": msg["role"],
+                    "content": msg["content"][:20] + "..." if len(msg["content"]) > 20 else msg["content"]
+                }
+                for msg in api_messages
+            ]
+        }
+    }
+    st.expander("API Request Debug Info").json(debug_data)
+    
     response = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers=headers,
@@ -110,6 +147,7 @@ def call_claude_api(system_prompt, messages, model, api_key):
     
     if response.status_code != 200:
         error_info = response.json()
+        st.expander("API Response Error").json(error_info)
         raise Exception(f"Error code: {response.status_code} - {error_info}")
     
     return response.json()
@@ -200,7 +238,12 @@ if st.session_state.df is not None and api_key:
                 
                 # Add previous conversation context (limited to last 4 messages)
                 for msg in st.session_state.messages[-6:]:
-                    api_messages.append({"role": msg["role"], "content": msg["content"]})
+                    # Ensure content is not empty
+                    if msg["content"] and msg["content"].strip():
+                        api_messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
                 
                 # Call Claude API directly
                 with st.spinner("Thinking..."):
@@ -230,7 +273,8 @@ if st.session_state.df is not None and api_key:
                 message_placeholder.markdown(full_response)
         
         # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        if full_response and full_response.strip():
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 else:
     if not api_key:
         st.info("Please enter your Anthropic API key in the sidebar to start chatting.")
