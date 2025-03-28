@@ -209,7 +209,6 @@ if st.session_state.df is not None and api_key:
                         response = call_claude_api(
                             system_prompt=system_prompt,
                             messages=api_messages,
-                            model=selected_model,
                             api_key=api_key
                         )
                         
