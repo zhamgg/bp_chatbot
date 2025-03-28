@@ -1,4 +1,8 @@
 import streamlit as st
+
+# Set page configuration - MUST be the first Streamlit command
+st.set_page_config(page_title="Boardingpass PA Chatbot", layout="wide")
+
 import pandas as pd
 import anthropic
 import os
@@ -8,8 +12,11 @@ import importlib
 from anthropic import Anthropic
 
 # Check Anthropic package version
-anthropic_version = importlib.metadata.version('anthropic')
-st.sidebar.write(f"Anthropic package version: {anthropic_version}")
+try:
+    anthropic_version = importlib.metadata.version('anthropic')
+    st.sidebar.write(f"Anthropic package version: {anthropic_version}")
+except:
+    st.sidebar.write("Could not determine Anthropic package version")
 
 # Set up available Claude models
 CLAUDE_MODELS = [
@@ -17,9 +24,6 @@ CLAUDE_MODELS = [
     "claude-3-opus-20240229",    # Most powerful for older clients
     "claude-3-5-sonnet-20240620" # Newer model that may require updated client
 ]
-
-# Set page configuration
-st.set_page_config(page_title="Boardingpass PA Chatbot", layout="wide")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
