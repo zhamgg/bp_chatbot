@@ -107,13 +107,50 @@ def call_claude_api(system_prompt, messages, api_key, model=MODEL):
         "temperature": 0,
         "messages": api_messages
     }
+
+    # Debug information
+    debug_data = {
+        "url": "https://api.anthropic.com/v1/messages",
+        "headers": {
+            "x-api-key": "sk-***" + api_key[-4:],  # Show only last 4 chars
+            "content-type": "application/json",
+            "anthropic-version": "2023-06-01"
+        },
+        "data": {
+            "model": MODEL,
+            "system": system_prompt[:100] + "...",  # Truncate for display
+            "max_tokens": 2000,
+            "temperature": 0,
+            "messages": [
+                {
+                    "role": msg["role"],
+                    "content": msg["content"][:20] + "..." if len(msg["content"]) > 20 else msg["content"]
+                }
+                for msg in api_messages
+            ]
+        }
+    }
+    st.expander("Request Debug Info").json(debug_data)
+
+    response = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers=headers,
+        json=data
+    )
     
+    if response.status_code != 200:
+        error_info = response.json()
+        st.expander("API Response Error").json(error_info)
+        raise Exception(f"Error code: {response.status_code} - {error_info}")
     
+    return response.json()
+
+
 # Chat interface
 st.header("Chat with Your Data")
 
 # Only show chat interface if data is loaded and API key is provided
-if st.session_state.df is not None and api_key:
+if st.session_state.df is not None:
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -211,12 +248,20 @@ if st.session_state.df is not None and api_key:
                             messages=api_messages,
                             api_key=api_key
                         )
-                        
+
                         # Get the content from the response
-                        if "content" in response and len(response["content"]) > 0:
-                            for content_block in response["content"]:
-                                if content_block["type"] == "text":
-                                    full_response += content_block["text"]
+                        if "content" in response:
+                            # New API format with content blocks
+                            if isinstance(response["content"], list):
+                                for block in response["content"]:
+                                    if isinstance(block, dict) and "text" in block:
+                                        full_response += block["text"]
+                            # String content (fallback)
+                            elif isinstance(response["content"], str):
+                                full_response = response["content"]
+                        # Legacy format
+                        elif "completion" in response:
+                            full_response = response["completion"]
                     except Exception as e:
                         st.error(f"Error with Claude API: {str(e)}")
                         full_response = "I encountered an error and couldn't process your question."
