@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Set page configuration - MUST be the first Streamlit command
-st.set_page_config(page_title="Boardingpass PA Chatbot", layout="wide")
+st.set_page_config(page_title="BoardingPass Chatbot", layout="wide")
 
 import pandas as pd
 import os
@@ -11,7 +11,7 @@ import requests
 import json
 
 # Application title
-st.title("Boardingpass PA Data Assistant")
+st.title("BoardingPass Data Assistant")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
@@ -20,6 +20,14 @@ if "messages" not in st.session_state:
 if "df" not in st.session_state:
     st.session_state.df = None
 
+
+# Use a fixed model instead of selection
+MODEL = "claude-3-sonnet-20240229"
+
+# Get API key from Streamlit secrets
+api_key = st.secrets["anthropic"]
+
+
 # Sidebar for file upload and settings
 with st.sidebar:
     st.header("Setup")
@@ -27,30 +35,15 @@ with st.sidebar:
     # File uploader
     uploaded_file = st.file_uploader("Upload Boardingpass PA CSV file", type=["csv"])
     
-    # API Key input
-    api_key = st.text_input("Enter your Anthropic API Key:", type="password")
-    
     # Reset button
     if st.button("Reset Chat History"):
         st.session_state.messages = []
         st.success("Chat history has been reset!")
     
-    # Model selection
-    selected_model = st.selectbox(
-        "Select Claude model:",
-        options=[
-            "claude-3-sonnet-20240229",
-            "claude-3-opus-20240229",
-            "claude-3-haiku-20240307"
-        ],
-        index=0,
-        help="Choose which Claude model to use."
-    )
-    
     # Instructions and information
     st.markdown("### About")
     st.markdown("""
-    This app allows you to chat with your Boardingpass PA data using Claude AI.
+    This app allows you to chat with your BoardingPass PA data.
     
     Simply upload your CSV file and start asking questions about the data.
     
@@ -115,43 +108,7 @@ def call_claude_api(system_prompt, messages, model, api_key):
         "messages": api_messages
     }
     
-    # Debug information
-    debug_data = {
-        "url": "https://api.anthropic.com/v1/messages",
-        "headers": {
-            "x-api-key": "sk-***" + api_key[-4:],  # Show only last 4 chars
-            "content-type": "application/json",
-            "anthropic-version": "2023-06-01"
-        },
-        "data": {
-            "model": model,
-            "system": system_prompt[:100] + "...",  # Truncate for display
-            "max_tokens": 2000,
-            "temperature": 0,
-            "messages": [
-                {
-                    "role": msg["role"],
-                    "content": msg["content"][:20] + "..." if len(msg["content"]) > 20 else msg["content"]
-                }
-                for msg in api_messages
-            ]
-        }
-    }
-    st.expander("API Request Debug Info").json(debug_data)
     
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers=headers,
-        json=data
-    )
-    
-    if response.status_code != 200:
-        error_info = response.json()
-        st.expander("API Response Error").json(error_info)
-        raise Exception(f"Error code: {response.status_code} - {error_info}")
-    
-    return response.json()
-
 # Chat interface
 st.header("Chat with Your Data")
 
@@ -163,7 +120,7 @@ if st.session_state.df is not None and api_key:
             st.write(message["content"])
     
     # Get user input
-    if prompt := st.chat_input("Ask a question about your Boardingpass PA data"):
+    if prompt := st.chat_input("Ask a question about your BoardingPass data"):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -276,11 +233,5 @@ if st.session_state.df is not None and api_key:
         if full_response and full_response.strip():
             st.session_state.messages.append({"role": "assistant", "content": full_response})
 else:
-    if not api_key:
-        st.info("Please enter your Anthropic API key in the sidebar to start chatting.")
-    else:
-        st.info("Please upload a CSV file to start chatting.")
+    st.info("Please upload a CSV file to start chatting.")
 
-# Footer
-st.markdown("---")
-st.markdown("Powered by Claude and Streamlit")
