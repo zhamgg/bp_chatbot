@@ -4,10 +4,22 @@ import anthropic
 import os
 import io
 import time
+import importlib
 from anthropic import Anthropic
 
+# Check Anthropic package version
+anthropic_version = importlib.metadata.version('anthropic')
+st.sidebar.write(f"Anthropic package version: {anthropic_version}")
+
+# Set up available Claude models
+CLAUDE_MODELS = [
+    "claude-3-sonnet-20240229",  # Most stable version for older clients
+    "claude-3-opus-20240229",    # Most powerful for older clients
+    "claude-3-5-sonnet-20240620" # Newer model that may require updated client
+]
+
 # Set page configuration
-st.set_page_config(page_title="BoardingPass PA Chatbot", layout="wide")
+st.set_page_config(page_title="Boardingpass PA Chatbot", layout="wide")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
@@ -17,7 +29,7 @@ if "df" not in st.session_state:
     st.session_state.df = None
 
 # Application title
-st.title("BoardingPass PA Data Assistant")
+st.title("Boardingpass PA Data Assistant")
 
 # Sidebar for file upload and settings
 with st.sidebar:
@@ -26,11 +38,20 @@ with st.sidebar:
     # File uploader
     uploaded_file = st.file_uploader("Upload Boardingpass PA CSV file", type=["csv"])
     
+    # Model selection
+    selected_model = st.selectbox(
+        "Select Claude model:",
+        options=CLAUDE_MODELS,
+        index=0,  # Default to the most stable model
+        help="Choose which Claude model to use. The Sonnet model is faster, while Opus is more powerful."
+    )
+    
     # Instructions and information
     st.markdown("### About")
     st.markdown("""
-    This app allows you to chat with your BoardingPass PA data.
+    This app allows you to chat with your Boardingpass PA data using Claude AI.
     
+    Simply upload your CSV file and start asking questions about the data.
     
     **Example questions:**
     - How many plan requests are there in total?
@@ -79,8 +100,23 @@ def get_anthropic_client():
     if api_key is None:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
     
-    return Anthropic(api_key=api_key)
-
+    # Option 3: Allow manual input
+    if api_key is None:
+        api_key = st.sidebar.text_input("Enter your Anthropic API key:", type="password")
+        if api_key:
+            st.sidebar.success("API key provided!")
+    
+    if not api_key:
+        st.error("No Anthropic API key found. Please provide your API key to continue.")
+        st.stop()
+    
+    # Ensure the API key is properly formatted (remove any whitespace)
+    api_key = api_key.strip()
+    
+    # Create the client with explicit parameter
+    client = Anthropic(api_key=api_key)
+    
+    return client
 
 # Only show chat interface if data is loaded
 if st.session_state.df is not None:
@@ -90,7 +126,7 @@ if st.session_state.df is not None:
             st.write(message["content"])
     
     # Get user input
-    if prompt := st.chat_input("Ask a question about your BoardingPass PA data"):
+    if prompt := st.chat_input("Ask a question about your Boardingpass PA data"):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -175,22 +211,66 @@ if st.session_state.df is not None:
                 
                 # Stream the response
                 with st.spinner("Thinking..."):
-                    response = client.messages.create(
-                        model="claude-3-5-sonnet-20240620",
-                        max_tokens=2000,
-                        temperature=0,
-                        messages=messages,
-                        stream=True
-                    )
-                    
-                    for chunk in response:
-                        if chunk.type == "content_block_delta":
-                            content_delta = chunk.delta.text
-                            full_response += content_delta
-                            message_placeholder.markdown(full_response + "▌")
-                            time.sleep(0.01)
-                    
-                    message_placeholder.markdown(full_response)
+                    try:
+                        # Get the client
+                        client = get_anthropic_client()
+                        
+                        # Debug information
+                        st.sidebar.write("Using API key (first 4 chars):", client.api_key[:4] + "..." if client.api_key else "None")
+                        
+                        # Stream the response
+                        response = client.messages.create(
+                            model=selected_model,  # Use the model selected in the sidebar
+                            max_tokens=2000,
+                            temperature=0,
+                            messages=messages,
+                            stream=True
+                        )
+                        
+                        for chunk in response:
+                            if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
+                                content_delta = chunk.delta.text
+                                full_response += content_delta
+                                message_placeholder.markdown(full_response + "▌")
+                                time.sleep(0.01)
+                        
+                        message_placeholder.markdown(full_response)
+                    except Exception as e:
+                        error_msg = str(e)
+                        st.error(f"Error with Claude API: {error_msg}")
+                        
+                        # Provide helpful troubleshooting guidance based on error
+                        if "authentication" in error_msg.lower():
+                            st.error("Authentication error. Please check your API key:")
+                            st.info("""
+                            1. Make sure your API key is correct and doesn't have extra spaces
+                            2. Verify that you're using a current API key from Anthropic
+                            3. Try regenerating your API key in your Anthropic dashboard
+                            """)
+                        elif "api_key" in error_msg.lower():
+                            st.error("API key issue. Please try these steps:")
+                            st.info("""
+                            1. Check that your API key begins with 'sk-ant-' 
+                            2. Ensure you're using a Claude API key, not from another service
+                            3. Try entering the API key manually in the sidebar
+                            """)
+                        elif "model" in error_msg.lower():
+                            st.error("Model name issue. Try these steps:")
+                            st.info("""
+                            1. Select a different model from the dropdown in the sidebar
+                            2. Update the anthropic package: `pip install anthropic --upgrade`
+                            3. Check that your API key has access to the selected model
+                            """)
+                        else:
+                            st.info("""
+                            General troubleshooting steps:
+                            1. Update the anthropic package: `pip install anthropic --upgrade`
+                            2. Try a different model from the dropdown
+                            3. Check your internet connection
+                            4. Verify your API key has sufficient credits
+                            """)
+                            
+                        message_placeholder.markdown("Sorry, I encountered an error when trying to process your question.")
             
             except Exception as e:
                 st.error(f"Error communicating with Claude: {e}")
@@ -202,3 +282,6 @@ if st.session_state.df is not None:
 else:
     st.info("Please upload a CSV file to start chatting.")
 
+# Footer
+st.markdown("---")
+st.markdown("Powered by Claude 3.5 Sonnet and Streamlit")
