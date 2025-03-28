@@ -76,7 +76,7 @@ if uploaded_file is not None:
         st.error(f"Error loading the file: {e}")
 
 # Function to call Claude API directly
-def call_claude_api(system_prompt, messages, model, api_key):
+def call_claude_api(system_prompt, messages, model=MODEL, api_key):
     headers = {
         "x-api-key": api_key,
         "content-type": "application/json",
