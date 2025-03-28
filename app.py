@@ -63,12 +63,24 @@ if uploaded_file is not None:
 # Chat interface
 st.header("Chat with Your Data")
 
-# Initialize Anthropic client (using API key from secrets)
+# Initialize Anthropic client with more flexible API key handling
 @st.cache_resource
 def get_anthropic_client():
-    api_key = st.secrets["ANTHROPIC_API_KEY"]
-    client = Anthropic(api_key=api_key)
-    return client
+    # Try multiple ways to get the API key
+    api_key = None
+    
+    # Option 1: Check st.secrets
+    try:
+        api_key = st.secrets["ANTHROPIC_API_KEY"]
+    except Exception as e:
+        st.warning("Could not load API key from st.secrets")
+    
+    # Option 2: Check environment variables
+    if api_key is None:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    
+    return Anthropic(api_key=api_key)
+
 
 # Only show chat interface if data is loaded
 if st.session_state.df is not None:
