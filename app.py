@@ -25,8 +25,22 @@ if "df" not in st.session_state:
 MODEL = "claude-3-sonnet-20240229"
 
 # Get API key from Streamlit secrets
-api_key = st.secrets["anthropic"]
-
+# Get API key from Streamlit secrets or allow user input as fallback
+try:
+    api_key = st.secrets["anthropic_api_key"]
+    api_key_source = "from secrets"
+except Exception:
+    # If secret isn't available, show input field
+    with st.sidebar:
+        api_key = st.text_input("Enter your Anthropic API Key:", type="password")
+        api_key_source = "from user input"
+    
+# Show API key status indicator
+with st.sidebar:
+    if api_key:
+        st.success(f"API Key loaded {api_key_source}")
+    else:
+        st.warning("API Key required to use the chat functionality")
 
 # Sidebar for file upload and settings
 with st.sidebar:
