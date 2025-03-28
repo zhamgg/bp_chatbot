@@ -96,9 +96,10 @@ def get_anthropic_client():
     
     # Option 1: Check st.secrets
     try:
-        api_key = st.secrets["ANTHROPIC_API_KEY"]
+        api_key = st.secrets["anthropic"]
     except Exception as e:
         st.warning("Could not load API key from st.secrets")
+
     
     # Option 2: Check environment variables
     if api_key is None:
